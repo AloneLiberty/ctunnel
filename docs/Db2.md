@@ -28,6 +28,14 @@ db2 "catalog tcpip node BLUDR remote 127.0.0.1 server 51234"
 db2 "catalog database BLUDB as BLUDR at node BLUDR"
 ```
 
+For applications using the CLI driver ( eg. db2lueff ) you can improve performance by tuning the block fetch size. In db2cli.ini:
+```
+[common]
+;FET_BUF_SIZE=256K
+BlockForNRows=40000
+BlockLobs=1
+```
+
 ## Integration With AKS
 
 There is a prebuilt container image which if desired you can push to a private registry here:
