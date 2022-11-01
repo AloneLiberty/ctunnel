@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ctunnel-bludr
+  namespace: ctunnel
+spec:
+  ports:
+  - name: tunnel
+    port: 51234
+    protocol: TCP
+    targetPort: 51234
+  selector:
+    app: ctunnel
+    inst: bludr
+  type: ClusterIP

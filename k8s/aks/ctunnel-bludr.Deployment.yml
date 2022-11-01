@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ctunnel-bludr
+  namespace: ctunnel
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ctunnel
+      inst: bludr
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: ctunnel
+        inst: bludr
+    spec:
+      containers:
+      - command:
+        - /bin/bash
+        - -cx
+        - |
+          #!/bin/bash
+          set -euo pipefail
+
+          exec ctunnel -n $(awk 'BEGIN { if ("$CTUNNEL_MODE" == "SERVER") printf "-s"; else printf "-c"; }') -b ${CTUNNEL_BUFFER_SIZE:-2048} -S -z ${CTUNNEL_COMPRESSION_LEVEL:-5} -l 0.0.0.0:51234 -f $CTUNNEL_FORWARD_HOST:$CTUNNEL_FORWARD_PORT -C ${CTUNNEL_CIPHER:-"proxy"}
+        envFrom:
+        - configMapRef:
+            name: ctunnel-bludr
+          prefix: CTUNNEL_
+        image: quay.io/thaughbaer/ctunnel:latest
+        imagePullPolicy: Always
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          successThreshold: 1
+          tcpSocket:
+            port: 51234
+          timeoutSeconds: 1
+        name: ctunnel
+        ports:
+        - containerPort: 51234
+          name: tunnel
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          tcpSocket:
+            port: 51234
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: "4"
+            memory: 512Mi
+          requests:
+            cpu: "2"
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsUser: 1000

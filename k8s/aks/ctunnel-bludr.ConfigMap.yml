@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ctunnel-bludr
+  namespace: ctunnel
+data:
+  MODE: CLIENT
+  BUFFER_SIZE: "65536"
+  FORWARD_HOST: 10.51.9.53
+  FORWARD_PORT: "51234"
