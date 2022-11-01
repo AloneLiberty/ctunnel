@@ -122,7 +122,8 @@ int add_host(struct Network *n, char *host, char *pool)
 			strcpy(hosts[i].natip,
 				   inet_ntoa((struct in_addr)n->addr.sin_addr));
 			strcpy(hosts[i].hostname, host);
-			snprintf(hosts[i].tunip, 32, "%s.%d", pool, i);
+			snprintf(hosts[i].tunip, INET_ADDRSTRLEN, "%s.%d", pool, i);
+			hosts[i].tunip[INET_ADDRSTRLEN - 1] = '\0';
 			ctunnel_log(stdout, LOG_INFO,
 						"Host %s[%s] -> %s reusing ID %d",
 						hosts[i].hostname,
@@ -143,7 +144,8 @@ int add_host(struct Network *n, char *host, char *pool)
 			strcpy(hosts[i].natip,
 				   inet_ntoa((struct in_addr)n->addr.sin_addr));
 			strcpy(hosts[i].hostname, host);
-			snprintf(hosts[i].tunip, 32, "%s.%d", pool, i);
+			snprintf(hosts[i].tunip, INET_ADDRSTRLEN, "%s.%d", pool, i);
+			hosts[i].tunip[INET_ADDRSTRLEN - 1] = '\0';
 			hosts[i].addr.s_addr = inet_addr(hosts[i].tunip);
 			ctunnel_log(stdout, LOG_INFO,
 						"Host %s[%s] -> %s now has ID %d",
@@ -187,7 +189,7 @@ void vpn_thread(void *arg)
 	ct = (struct Ctunnel *)arg;
 
 	if (ct->opt.comp == 1)
-		ct->comp = z_compress_init(ct->opt);
+		z_compress_init(&ct->opt, &ct->comp);
 
 	/* Data size, plus int for channel */
 	data = malloc(ct->opt.packet_size);

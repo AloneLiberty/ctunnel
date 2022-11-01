@@ -47,10 +47,9 @@ int keyfile_read(struct options *opt, char *filename)
         //    fprintf(stdout, "No Passkey, will prompt\n");
     }
 #ifndef _WIN32
-    fd = open(passkey, O_RDONLY,
-              S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
+    fd = open(passkey, O_RDONLY);
 #else
-    fd = _open(passkey, O_RDONLY | O_BINARY);
+    fd = open(passkey, O_RDONLY | O_BINARY);
 #endif
     if (fd < 0)
     {
@@ -104,10 +103,11 @@ int keyfile_write(struct options *opt, char *filename)
         passkey = strdup(filename);
     }
 #ifdef _WIN32
-    fd = open(passkey, O_RDWR | O_BINARY | O_CREAT);
+    fd = open(passkey, O_RDWR | O_BINARY | O_TRUNC | O_CREAT
+              S_IRUSR | S_IWUSR);
 #else
     fd = open(passkey, O_RDWR | O_TRUNC | O_CREAT,
-              S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
+              S_IRUSR | S_IWUSR);
 #endif
     if (fd < 0)
     {

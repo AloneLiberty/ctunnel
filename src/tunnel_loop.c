@@ -63,7 +63,7 @@ void tunnel_loop(struct options *opt)
 		exit(1);
 	}
 
-	tv.tv_sec = 5;
+	tv.tv_sec = 60;
 	tv.tv_usec = 0;
 
 	while (1)
@@ -132,10 +132,14 @@ void tunnel_loop(struct options *opt)
 						}
 					}
 				}
+			        else
+			        {
+				        net_close(net_srv);
+			        }
 			}
 			else
 			{
-				net_close(net_srv);
+				//net_close(net_srv);
 			}
 		}
 		else

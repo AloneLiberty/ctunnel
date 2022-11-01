@@ -27,9 +27,16 @@ void ctunnel_log(FILE *fp, int facility, const char *format, ...)
     vsprintf(text, format, args);
     va_end(args);
 
+    time_t now = time(NULL);
+    struct tm tm;
+    char buf[255];
+
+    localtime_r(&now, &tm);
+    strftime(buf, 26, "%Y:%m:%d %H:%M:%S", &tm);
 
 #ifndef _WIN32
     syslog(facility, "%s%s", (facility == LOG_CRIT) ? "ERROR: " : "", text);
 #endif
-    fprintf(fp, "[ctunnel] %s%s\n", (facility == LOG_CRIT) ? "ERROR: " : "", text);
+    fprintf(fp, "[ctunnel@%s] %s%s\n", buf, (facility == LOG_CRIT) ? "ERROR: " : "", text);
+    fflush(fp);
 }

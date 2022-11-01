@@ -62,27 +62,27 @@ int cidr_to_mask(char *data, int cidr)
     //    pow -= 2;
     for (i = 1; i < order; i++)
     {
-        strncat(data, "255.", 4);
+        strcat(data, "255.");
     }
     msk = 256 - (pow >> cidr);
-    sprintf(data, "%s%d", data, msk);
+    sprintf(data + strlen(data), "%d", msk);
     for (i = 0; i < 4 - order; i++)
-        strncat(data, ".0", 2);
+        strcat(data, ".0");
 
     return 0;
 }
 char *net_resolv(char *ip)
 {
     struct hostent *ht;
-    char *host = malloc(sizeof(char *) * 255);
+    char *host = malloc(sizeof(char) * (HOST_NAME_MAX + 1));
 
     if (!isdigit(ip[0]))
     {
         if ((ht = gethostbyname(ip)))
         {
-            memset(host, 0x00, sizeof(char *) * 255);
-            snprintf(host, 32, "%s",
+            snprintf(host, HOST_NAME_MAX, "%s",
                      inet_ntoa(*(struct in_addr *)ht->h_addr_list[0]));
+	    host[HOST_NAME_MAX] = '\0';
             return host;
         }
         else
@@ -96,6 +96,7 @@ char *net_resolv(char *ip)
     }
     return NULL;
 }
+
 struct Network *udp_bind(char *ip, int port, int timeout)
 {
 #ifdef _WIN32
@@ -229,13 +230,14 @@ netsock tcp_listen(char *ip, int port)
         perror("bind()");
         exit(1);
     }
-    if (listen(sockfd, 8) == -1)
+    if (listen(sockfd, MAX_THREADS) == -1)
     {
         perror("listen()");
         exit(1);
     }
     return sockfd;
 }
+
 netsock tcp_accept(int sockfd)
 {
 #ifndef _WIN32
@@ -248,13 +250,14 @@ netsock tcp_accept(int sockfd)
     return accept(sockfd, NULL, NULL);
 #endif
 }
+
 netsock tcp_connect(char *ip, int port)
 {
     netsockaddr_in address;
     netsock clifd;
     int servfd;
     struct hostent *ht;
-    char host[255] = "";
+    char host[HOST_NAME_MAX + 1] = "";
 
     clifd = socket(AF_INET, SOCK_STREAM, 0);
     if (clifd < 0)
@@ -266,14 +269,14 @@ netsock tcp_connect(char *ip, int port)
     if (!isdigit(ip[0]))
     {
         ht = gethostbyname(ip);
-        memset(host, 0x00, 255);
-        snprintf(host, 32, "%s",
+        snprintf(host, HOST_NAME_MAX, "%s",
                  inet_ntoa(*(struct in_addr *)ht->h_addr_list[0]));
     }
     else
     {
-        snprintf(host, 254, "%s", ip);
+        snprintf(host, HOST_NAME_MAX, "%s", ip);
     }
+    host[HOST_NAME_MAX] = '\0';
 
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = inet_addr(host);
@@ -287,12 +290,16 @@ netsock tcp_connect(char *ip, int port)
         return servfd;
     }
 
+    ctunnel_log(stdout, LOG_INFO, "TCP Connect to %s:%d", host, port);
+
     return clifd;
 }
-int net_read(struct Ctunnel *ct, struct Network *net, unsigned char *data, int len, int enc)
+
+int net_read(struct Ctunnel *ct, struct Network *net, struct Packet *pkt, int enc)
 {
     int ret = 0;
-    struct Packet pkt_out = {NULL, 0, 0, "", "", 0};
+
+    struct Packet pkt_out;
 #ifdef HAVE_OPENSSL
     do_encrypt = openssl_do_encrypt;
     do_decrypt = openssl_do_decrypt;
@@ -307,35 +314,48 @@ int net_read(struct Ctunnel *ct, struct Network *net, unsigned char *data, int l
 
     if (ct->opt.proto == TCP)
     {
-        ret = (int)recv(net->sockfd, (netbuf *)data, len, 0);
+        ret = (int)recv(net->sockfd, (netbuf *)pkt->data, ct->opt.packet_size, 0);
     }
     else
     {
-        ret = recvfrom(net->sockfd, (netbuf *)data, len,
+        ret = recvfrom(net->sockfd, (netbuf *)pkt->data, ct->opt.packet_size,
                        0, (netsockaddr *)&net->addr, &net->len);
     }
-
     if (ret < 0)
+    {
+        ctunnel_log(stderr, LOG_ERR, "[%d] recv(%d): %s", ct->id, net->sockfd, strerror(errno));
         return ret;
+    }
+    if (ret == 0)
+    {
+        ctunnel_log(stdout, LOG_INFO, "[%d:%d] socket(%d): closed", ct->id, enc, net->sockfd);
+        return -1;
+    }
+    pkt->len = ret;
+
     if (enc == 1)
     {
         if (ct->opt.comp == 1)
         {
             if (ct->opt.proto == UDP)
-                ct->comp = z_compress_init(ct->opt);
-            pkt_out = z_uncompress(ct->comp.inflate, data, ret);
+                z_compress_init(&ct->opt, &ct->comp);
+            ret = z_uncompress(&ct->comp.inflate, pkt, &pkt_out);
+            free(pkt->data);
+            *pkt = pkt_out;
             if (ct->opt.proto == UDP)
-                z_compress_end(ct->comp);
-            memcpy(data, pkt_out.data, pkt_out.len);
+                z_compress_end(&ct->comp);
+            if (ret < 0)
+                return ret;
             ret = pkt_out.len;
-            free(pkt_out.data);
         }
         if (ct->opt.proxy == 0)
         {
-            pkt_out = do_decrypt(ct->dctx, data, ret);
-            memcpy(data, pkt_out.data, pkt_out.len);
+            ret = do_decrypt(ct->dctx, pkt, &pkt_out);
+            free(pkt->data);
+            *pkt = pkt_out;
+            if (ret < 0)
+                return ret;
             ret = pkt_out.len;
-            free(pkt_out.data);
         }
     }
     //        fprintf(stdout, "R: [%s] -> [%s]\n",
@@ -347,10 +367,11 @@ int net_read(struct Ctunnel *ct, struct Network *net, unsigned char *data, int l
 
     return ret;
 }
-int net_write(struct Ctunnel *ct, struct Network *net, unsigned char *data, int len, int enc)
+
+int net_write(struct Ctunnel *ct, struct Network *net, struct Packet *pkt, int enc)
 {
     int ret = 0;
-    struct Packet pkt_out = {NULL, 0, 0, "", "", 0};
+    struct Packet pkt_out;
 #ifdef HAVE_OPENSSL
     do_encrypt = openssl_do_encrypt;
     do_decrypt = openssl_do_decrypt;
@@ -367,41 +388,53 @@ int net_write(struct Ctunnel *ct, struct Network *net, unsigned char *data, int 
     {
         if (ct->opt.proxy == 0)
         {
-            pkt_out = do_encrypt(ct->ectx, data, len);
-            memcpy(data, pkt_out.data, pkt_out.len);
-            len = pkt_out.len;
-            free(pkt_out.data);
+            ret = do_encrypt(ct->ectx, pkt, &pkt_out);
+            free(pkt->data);
+            *pkt = pkt_out;
+            if (ret < 0)
+                return ret;
+            ret = pkt_out.len;
         }
         if (ct->opt.comp == 1)
         {
             if (ct->opt.proto == UDP)
-                ct->comp = z_compress_init(ct->opt);
-            pkt_out = z_compress(ct->comp.deflate, data, len);
+                z_compress_init(&ct->opt, &ct->comp);
+            ret = z_compress(&ct->comp.deflate, pkt, &pkt_out);
+            free(pkt->data);
+            *pkt = pkt_out;
             if (ct->opt.proto == UDP)
-                z_compress_end(ct->comp);
-            memcpy(data, pkt_out.data, pkt_out.len);
-            len = pkt_out.len;
-            free(pkt_out.data);
+                z_compress_end(&ct->comp);
+            if (ret < 0)
+                return ret;
+            ret = pkt_out.len;
         }
     }
 
     if (ct->opt.proto == TCP)
     {
-        ret = (int)send(net->sockfd, (netbuf *)data, len, 0);
+        ret = (int)send(net->sockfd, (netbuf *)pkt->data, pkt->len, 0);
     }
     else
     {
-        ret = sendto(net->sockfd, (netbuf *)data, len, 0,
+        ret = sendto(net->sockfd, (netbuf *)pkt->data, pkt->len, 0,
                      (netsockaddr *)&net->addr,
                      (netsocklen_t)sizeof(netsockaddr));
+    }
+    if (ret < pkt->len)
+    {
+        ctunnel_log(stderr, LOG_CRIT, "[%d:%d] Short write sent %d expected %d", ct->id, enc, ret, pkt->len);
+        //exit(1);
+        return -1;
     }
 
     net->rate.tx.total += ret;
 
     return ret;
 }
+
 void net_close(struct Network *net)
 {
+    ctunnel_log(stdout, LOG_INFO, "close(%d)", net->sockfd);
 #ifdef _WIN32
     closesocket(net->sockfd);
 #else

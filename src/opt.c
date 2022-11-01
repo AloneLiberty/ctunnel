@@ -59,18 +59,18 @@ void usage(void)
 					"  -e\t(optional) Post Connection UP exec\n"
 					"  -z #  (optional) Enable Compression at level #, 5 default.\n"
 					"  -b #  (optional) Packet buffer size in bytes (%d) by default.\n"
-					"  -k\t(optional) Speficy non-default Key File.\n"
+					"  -k\t(optional) Specify non-default Key File.\n"
 					"  -S\t(optional) Display traffic stats.\n"
-					"  -c\t(manditory) Operate in Client Mode (do not use with -s)\n"
-					"  -s\t(manditory) Operate in Server Mode (do not use with -c)\n"
-					"  -l\t(manditory) Listen for connections on this ip:port\n"
-					"  -f\t(manditory) Forward connection from -l to this ip:port\n"
+					"  -c\t(mandatory) Operate in Client Mode (do not use with -s)\n"
+					"  -s\t(mandatory) Operate in Server Mode (do not use with -c)\n"
+					"  -l\t(mandatory) Listen for connections on this ip:port\n"
+					"  -f\t(mandatory) Forward connection from -l to this ip:port\n"
 #ifndef _WIN32
 					"                  VPN Mode: connect to this address\n"
 #endif
-					"  -C\t(manditory) Encrypt traffic with this cipher\n"
+					"  -C\t(mandatory) Encrypt traffic with this cipher\n"
 #ifndef HAVE_OPENSSL
-					"  -M\t(manditory) Cipher Mode (ecb,cfb,cbc,ofb) cfb is recommended\n\n"
+					"  -M\t(mandatory) Cipher Mode (ecb,cfb,cbc,ofb) cfb is recommended\n\n"
 #endif
 					"See ctunnel(1) for examples\n",
 			PACKET_SIZE);
@@ -118,6 +118,8 @@ struct options get_options(int argc, char *argv[])
 #ifndef HAVE_OPENSSL
 	memset(opt.mode, 0x00, sizeof(opt.mode));
 #endif
+	int keyenv = 0;
+	char *p;
 
 	for (i = 0; argv[i] != NULL; i++)
 	{
@@ -253,7 +255,10 @@ struct options get_options(int argc, char *argv[])
 				break;
 			case 'i':
 				if (argv[i + 1][0] != '-')
-					strncpy(opt.pool, argv[i + 1], 32);
+				{
+					strncpy(opt.pool, argv[i + 1], INET_ADDRSTRLEN);
+					opt.pool[INET_ADDRSTRLEN - 1] = '\0';
+				}
 				break;
 			case 'P':
 				if (argv[i + 1][0] != '-')
@@ -273,30 +278,30 @@ struct options get_options(int argc, char *argv[])
 	{
 		fprintf(stdout,
 				"ERROR: Please specify Client of Server mode with -c or -s\n");
-		exit(0);
+		exit(1);
 	}
 	if (opt.comp_level > 9 || opt.comp_level < 0)
 	{
 		fprintf(stdout,
 				"ERROR: Compression level must be between 0 and 9\n");
-		exit(0);
+		exit(1);
 	}
 	if (opt.packet_size < 1)
 	{
 		fprintf(stdout, "ERROR: Packet size must be greater than 0\n");
-		exit(0);
+		exit(1);
 	}
 	if (opt.vpn == 1)
 	{
 		if (opt.role == ROLE_SERVER && opt.listen != 1) // VPN mode, server must specify listen address/port
 		{
 			fprintf(stdout, "ERROR: -l must be specified\n");
-			exit(0);
+			exit(1);
 		}
 		if (opt.role == ROLE_CLIENT && opt.forward != 1) // VPN mode, client must specify forward/connect address/port
 		{
 			fprintf(stdout, "ERROR: -f must be specified\n");
-			exit(0);
+			exit(1);
 		}
 		opt.packet_size = opt.packet_size * sizeof(unsigned char *) + sizeof(int);
 	}
@@ -306,7 +311,7 @@ struct options get_options(int argc, char *argv[])
 		{
 			fprintf(stdout,
 					"ERROR: Both -l and -f must be set\n");
-			exit(0);
+			exit(1);
 		}
 	}
 	if ((strlen(opt.pool)) < 1)
@@ -316,29 +321,54 @@ struct options get_options(int argc, char *argv[])
 	if (opt.proxy == 1)
 		return opt;
 
-	if ((keyfile_read(&opt, opt.keyfile)) < 0)
+	if ((p = getenv("CTUNNEL_KEY")) != NULL)
+        {
+		strncpy((char *)opt.key.key, p, KEY_MAX);
+		opt.key.key[KEY_MAX] = '\0';
+		keyenv++;
+        }
+	if ((p = getenv("CTUNNEL_IV")) != NULL)
+        {
+		strncpy((char *)opt.key.iv, p, IV_MAX);
+		opt.key.iv[IV_MAX] = '\0';
+		keyenv++;
+        }
+	if (!keyenv)
 	{
-		ctunnel_log(stderr, LOG_CRIT, "keyfile: %s", strerror(errno));
+		if ((keyfile_read(&opt, opt.keyfile)) < 0)
+		{
+			ctunnel_log(stderr, LOG_CRIT, "keyfile: %s", strerror(errno));
+			exit(1);
+		}
+
+		if ((bin_size(opt.key.key)) < KEY_MAX)
+		{
+			fprintf(stdout, "Enter Key [%d Characters]: ", KEY_MAX);
+			for (x = 0; x < KEY_MAX; x++)
+			{
+				opt.key.key[x] = fgetc(stdin);
+			}
+			fgetc(stdin);
+		}
+		if ((bin_size(opt.key.iv)) < IV_MAX)
+		{
+			fprintf(stdout, "Enter IV  [%d Characters]: ", IV_MAX);
+			for (x = 0; x < IV_MAX; x++)
+			{
+				opt.key.iv[x] = fgetc(stdin);
+			}
+			fgetc(stdin);
+		}
+	}
+	if ((bin_size(opt.key.key)) < KEY_MAX)
+	{
+		fprintf(stdout, "ERROR: Key too short\n");
 		exit(1);
 	}
-
-	if ((bin_size(opt.key.key)) < 16)
+	if ((bin_size(opt.key.iv)) < IV_MAX)
 	{
-		fprintf(stdout, "Enter Key [16 Characters]: ");
-		for (x = 0; x < 16; x++)
-		{
-			opt.key.key[x] = fgetc(stdin);
-		}
-		fgetc(stdin);
-	}
-	if ((bin_size(opt.key.iv)) < 16)
-	{
-		fprintf(stdout, "Enter IV  [16 Characters]: ");
-		for (x = 0; x < 16; x++)
-		{
-			opt.key.iv[x] = fgetc(stdin);
-		}
-		fgetc(stdin);
+		fprintf(stdout, "ERROR: IV too short\n");
+		exit(1);
 	}
 
 	/* Check ciphers/modes */
@@ -359,7 +389,7 @@ struct options get_options(int argc, char *argv[])
 	else
 	{
 		fprintf(stdout, "ERROR: Please specify Cipher Mode with -M\n");
-		exit(0);
+		exit(1);
 	}
 #endif
 
@@ -405,9 +435,12 @@ struct options get_options(int argc, char *argv[])
 	if ((bin_size((unsigned char *)opt.key.ciphername)) <= 0)
 	{
 		fprintf(stdout, "ERROR: Please specify Stream Cipher with -C\n");
-		exit(0);
+		exit(1);
 	}
-	keyfile_write(&opt, opt.keyfile);
+	if (!keyenv)
+	{
+		keyfile_write(&opt, opt.keyfile);
+	}
 
 	return opt;
 }

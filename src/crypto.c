@@ -41,6 +41,7 @@ crypto_ctx *openssl_crypto_init(struct options opt, int dir)
 
     return ctx;
 }
+
 void openssl_crypto_reset(crypto_ctx *ctx, struct options opt, int dir)
 {
     if (opt.proxy == 0)
@@ -51,6 +52,7 @@ void openssl_crypto_reset(crypto_ctx *ctx, struct options opt, int dir)
             EVP_DecryptInit_ex(ctx, opt.key.cipher, NULL, opt.key.key, opt.key.iv);
     }
 }
+
 void openssl_crypto_deinit(crypto_ctx *ctx)
 {
     EVP_CIPHER_CTX_cleanup(ctx);
@@ -60,31 +62,39 @@ void openssl_crypto_deinit(crypto_ctx *ctx)
     EVP_CIPHER_CTX_free(ctx);
 #endif
 }
-struct Packet openssl_do_encrypt(crypto_ctx *ctx, unsigned char *intext,
-                                 int size)
+
+int openssl_do_encrypt(crypto_ctx *ctx, struct Packet *pkt, struct Packet *pkt_out)
 {
-    struct Packet crypto;
+    int ret = 0;
 
-    crypto.len = 0;
-    crypto.data = calloc(1, size * sizeof(unsigned char *));
+    pkt_out->size = pkt->size;
+    pkt_out->data = malloc(sizeof(unsigned char) * pkt_out->size);
+    pkt_out->len = 0;
 
-    if (!EVP_EncryptUpdate(ctx, crypto.data, &crypto.len, intext, size))
-        ctunnel_log(stderr, LOG_CRIT, "EVP_EncryptUpdate: Error");
+    if (pkt->len > 0)
+    {
+        if (!(ret = EVP_EncryptUpdate(ctx, pkt_out->data, &pkt_out->len, pkt->data, pkt->len)))
+            ctunnel_log(stderr, LOG_CRIT, "EVP_EncryptUpdate: Error");
+    }
 
-    return crypto;
+    return ret;
 }
-struct Packet openssl_do_decrypt(crypto_ctx *ctx, unsigned char *intext,
-                                 int size)
+
+int openssl_do_decrypt(crypto_ctx *ctx, struct Packet *pkt, struct Packet *pkt_out)
 {
-    struct Packet crypto;
+    int ret = 0;
 
-    crypto.len = 0;
-    crypto.data = calloc(1, size * sizeof(unsigned char *));
+    pkt_out->size = pkt->size;
+    pkt_out->data = malloc(sizeof(unsigned char) * pkt_out->size);
+    pkt_out->len = 0;
 
-    if (!EVP_DecryptUpdate(ctx, crypto.data, &crypto.len, intext, size))
-        ctunnel_log(stderr, LOG_CRIT, "EVP_DecryptUpdate: Error");
+    if (pkt->len > 0)
+    {
+        if (!(ret = EVP_DecryptUpdate(ctx, pkt_out->data, &pkt_out->len, pkt->data, pkt->len)))
+            ctunnel_log(stderr, LOG_CRIT, "EVP_DecryptUpdate: Error");
+    }
 
-    return crypto;
+    return ret;
 }
 #else
 crypto_ctx gcrypt_crypto_init(struct options opt, int dir)
@@ -98,13 +108,13 @@ crypto_ctx gcrypt_crypto_init(struct options opt, int dir)
         ctunnel_log(stderr, LOG_CRIT, "gcry_open_cipher: %s", gpg_strerror(ret));
         exit(ret);
     }
-    ret = gcry_cipher_setkey(ctx, opt.key.key, 16);
+    ret = gcry_cipher_setkey(ctx, opt.key.key, KEY_MAX);
     if (ret)
     {
         ctunnel_log(stderr, LOG_CRIT, "gcry_cipher_setkey: %s", gpg_strerror(ret));
         exit(ret);
     }
-    ret = gcry_cipher_setiv(ctx, opt.key.iv, 16);
+    ret = gcry_cipher_setiv(ctx, opt.key.iv, IV_MAX);
     if (ret)
     {
         ctunnel_log(stderr, LOG_CRIT, "gcry_cipher_setiv: %s", gpg_strerror(ret));
@@ -112,42 +122,53 @@ crypto_ctx gcrypt_crypto_init(struct options opt, int dir)
     }
     return ctx;
 }
+
 void gcrypt_crypto_deinit(crypto_ctx ctx)
 {
     gcry_cipher_close(ctx);
 }
+
 void gcrypt_crypto_reset(crypto_ctx ctx, struct options opt, int dir)
 {
     gcrypt_crypto_deinit(ctx);
     ctx = gcrypt_crypto_init(opt, dir);
 }
-struct Packet gcrypt_do_encrypt(crypto_ctx ctx, unsigned char *intext,
-                                int size)
+
+int gcrypt_do_encrypt(crypto_ctx ctx, struct Packet *pkt, struct Packet *pkt_out)
 {
     int ret = 0;
-    struct Packet crypto;
 
-    crypto.len = size;
-    crypto.data = calloc(1, crypto.len * sizeof(char *));
-    ret = gcry_cipher_encrypt(ctx, crypto.data, crypto.len,
-                              intext, size);
-    if (ret)
+    pkt_out->size = pkt->size;
+    pkt_out->data = malloc(sizeof(unsigned char) * pkt_out->size);
+    pkt_out->len = 0;
+
+    if (pkt->len > 0)
     {
-        ctunnel_log(stderr, LOG_CRIT, "Encrypt Error: %s", gpg_strerror(ret));
+        if (!(ret = gcry_cipher_encrypt(ctx, pkt_out->data, &pkt_out->len, pkt->data, pkt->len)))
+	{
+            ctunnel_log(stderr, LOG_CRIT, "Encrypt Error: %s", gpg_strerror(ret));
+        }
     }
 
-    return crypto;
+    return ret;
 }
-struct Packet gcrypt_do_decrypt(crypto_ctx ctx, unsigned char *intext,
-                                int size)
+
+int gcrypt_do_decrypt(crypto_ctx ctx, struct Packet *pkt, struct Packet *pkt_out)
 {
-    struct Packet crypto;
+    int ret = 0;
 
-    crypto.len = size;
-    crypto.data = calloc(1, crypto.len);
-    gcry_cipher_decrypt(ctx, crypto.data,
-                        crypto.len, intext, size);
+    pkt_out->size = pkt->size;
+    pkt_out->data = malloc(sizeof(unsigned char) * pkt_out->size);
+    pkt_out->len = 0;
 
-    return crypto;
+    if (pkt->len > 0)
+    {
+        if (!(ret = gcry_cipher_decrypt(ctx, pkt_out->data, &pkt_out->len, pkt->data, pkt->len)))
+	{
+            ctunnel_log(stderr, LOG_CRIT, "Encrypt Error: %s", gpg_strerror(ret));
+        }
+    }
+
+    return ret;
 }
 #endif

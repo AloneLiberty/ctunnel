@@ -53,6 +53,9 @@ typedef void netbuf;
 #define ROLE_CLIENT 0
 #define ROLE_SERVER 1
 
+#define KEY_MAX 32
+#define IV_MAX 32
+
 struct xfer_stats
 {
     float bps;
@@ -66,10 +69,11 @@ struct xfer_stats
 struct Packet
 {
     unsigned char *data;
-    int id;
-    int type;
-    char src[16];
-    char dst[16];
+    int size;
+//    int id;
+//    int type;
+//    char src[16];
+//    char dst[16];
     int len;
 };
 struct crypt
@@ -85,8 +89,8 @@ struct compression
 struct keys
 {
     int version;
-    unsigned char key[18];
-    unsigned char iv[18];
+    unsigned char key[KEY_MAX + 1];
+    unsigned char iv[IV_MAX + 1];
     char ciphername[255];
 #ifdef HAVE_OPENSSL
     const EVP_CIPHER *cipher;
@@ -124,8 +128,8 @@ struct options
     struct keys key;
     struct Host local;
     struct Host remote;
-    char pool[32];
-    char gw[32];
+    char pool[INET_ADDRSTRLEN];
+    char gw[INET_ADDRSTRLEN];
     char cipher[254];
     char *networks;
     char *keyfile;
@@ -203,8 +207,8 @@ struct Ctunnel
     int tunfd;
     int id;
     time_t seen;
-    char src[32];
-    char dst[32];
+    char src[INET_ADDRSTRLEN];
+    char dst[INET_ADDRSTRLEN];
 };
 
 static pthread_mutex_t mutex;
@@ -221,8 +225,8 @@ struct Hosts
 {
     struct Network *net;
     struct Networks n[254];
-    char natip[32];
-    char tunip[32];
+    char natip[INET_ADDRSTRLEN];
+    char tunip[INET_ADDRSTRLEN];
     char hostname[255];
     int id;
     int ni;
@@ -233,17 +237,17 @@ static struct Hosts hosts[MAX_CLIENTS];
 static int clients;
 
 #ifdef HAVE_OPENSSL
-static struct Packet (*do_encrypt)(crypto_ctx *ctx, unsigned char *intext, int size);
-static struct Packet (*do_decrypt)(crypto_ctx *ctx, unsigned char *intext, int size);
+static int (*do_encrypt)(crypto_ctx *ctx, struct Packet *pkt, struct Packet *pkt_out);
+static int (*do_decrypt)(crypto_ctx *ctx, struct Packet *pkt, struct Packet *pkt_out);
 static crypto_ctx *(*crypto_init)(struct options opt, int dir);
 static void (*crypto_deinit)(crypto_ctx *ctx);
 static void (*crypto_reset)(crypto_ctx *ctx, struct options opt, int dir);
 #else
-struct Packet (*do_encrypt)(crypto_ctx ctx, unsigned char *intext, int size);
-struct Packet (*do_decrypt)(crypto_ctx ctx, unsigned char *intext, int size);
-crypto_ctx (*crypto_init)(struct options opt, int dir);
-void (*crypto_deinit)(crypto_ctx ctx);
-void (*crypto_reset)(crypto_ctx ctx, struct options opt, int dir);
+static int (*do_encrypt)(crypto_ctx ctx, struct Packet *pkt, struct Packet *pkt_out);
+static int (*do_decrypt)(crypto_ctx ctx, struct Packet *pkt, struct Packet *pkt_out);
+static crypto_ctx (*crypto_init)(struct options opt, int dir);
+static void (*crypto_deinit)(crypto_ctx ctx);
+static void (*crypto_reset)(crypto_ctx ctx, struct options opt, int dir);
 #endif
 
 #define SERVER 1

@@ -7,6 +7,6 @@ struct Network *udp_connect(char *ip, int port, int timeout);
 netsock tcp_listen(char *ip, int port);
 netsock tcp_accept(int sockfd);
 netsock tcp_connect(char *ip, int port);
-int net_read(struct Ctunnel *ct, struct Network *net, unsigned char *data, int len, int enc);
-int net_write(struct Ctunnel *ct, struct Network *net, unsigned char *data, int len, int enc);
+int net_read(struct Ctunnel *ct, struct Network *net, struct Packet *pkt, int enc);
+int net_write(struct Ctunnel *ct, struct Network *net, struct Packet *pkt, int enc);
 void net_close(struct Network *net);

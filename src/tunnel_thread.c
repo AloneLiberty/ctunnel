@@ -24,9 +24,10 @@ void *ctunnel_mainloop(void *arg)
 	struct Ctunnel *ct;
 	struct Network *net_srv;
 	struct Network *net_cli;
-	unsigned char *data;
+	struct Packet pkt;
 	fd_set rfd;
 	int ret = 0, dir = 0;
+	time_t t, tl;
 	extern int threads[MAX_THREADS];
 	struct timeval tv;
 #ifdef HAVE_OPENSSL
@@ -40,7 +41,9 @@ void *ctunnel_mainloop(void *arg)
 	crypto_init = gcrypt_crypto_init;
 	crypto_deinit = gcrypt_crypto_deinit;
 #endif
+        struct xfer_stats rx_st, tx_st;
 
+        t = tl = time(NULL);
 	ct = (struct Ctunnel *)arg;
 
 	if (ct->opt.proto == TCP)
@@ -63,9 +66,15 @@ void *ctunnel_mainloop(void *arg)
 	}
 
 	if (ct->opt.comp == 1)
-		ct->comp = z_compress_init(ct->opt);
+		z_compress_init(&ct->opt, &ct->comp);
 
-	data = calloc(1, sizeof(char *) * ct->opt.packet_size);
+        pkt.size = ct->opt.packet_size * 2;
+	pkt.data = malloc(sizeof(unsigned char) * pkt.size);
+
+        xfer_stats_init(&tx_st, (int)t);
+        xfer_stats_init(&rx_st, (int)t);
+        //if (ct->opt.stats == 1)
+        //        xfer_stats_print(stdout, &tx_st, &rx_st);
 
 	while (1)
 	{
@@ -88,59 +97,79 @@ void *ctunnel_mainloop(void *arg)
 		if (ret < 0)
 			break;
 
+		t = time(NULL);
+
+		//if (ct->opt.stats == 1)
+                //        xfer_stats_print(stdout, &tx_st, &rx_st);
+
 		if (FD_ISSET(net_srv->sockfd, &rfd))
 		{
-			if (ct->opt.role == 0)
+			if (ct->opt.role == ROLE_CLIENT)
 				dir = 0;
-			if (ct->opt.role == 1)
+			if (ct->opt.role == ROLE_SERVER)
 				dir = 1;
 
-			ret = net_read(ct, net_srv, data, ct->opt.packet_size, dir);
-
-			if (ct->opt.role == 0)
-				dir = 1;
-			if (ct->opt.role == 1)
-				dir = 0;
-
-			ret = net_write(ct, net_cli, data, ret, dir);
-
-			memset(data, 0x00, sizeof(char *) * ct->opt.packet_size);
-
-			if (ret <= 0) /* Connection finished */
+			ret = net_read(ct, net_srv, &pkt, dir);
+			if (ret < 0)
 				break;
+
+			if (pkt.len > 0)
+                        {
+			        if (ct->opt.role == ROLE_CLIENT)
+				        dir = 1;
+			        if (ct->opt.role == ROLE_SERVER)
+				        dir = 0;
+
+			        ret = net_write(ct, net_cli, &pkt, dir);
+			        if (ret <= 0) 
+				        break;
+                        }
 		}
 		if (FD_ISSET(net_cli->sockfd, &rfd))
 		{
-			if (ct->opt.role == 0)
+			if (ct->opt.role == ROLE_CLIENT)
 				dir = 1;
-			if (ct->opt.role == 1)
+			if (ct->opt.role == ROLE_SERVER)
 				dir = 0;
 
-			ret = net_read(ct, net_cli, data, ct->opt.packet_size, dir);
-			if (ret <= 0)
+			ret = net_read(ct, net_cli, &pkt, dir);
+			if (ret < 0)
 				break;
 
-			if (ct->opt.role == 0)
+			if (ct->opt.role == ROLE_CLIENT)
 				dir = 0;
-			if (ct->opt.role == 1)
+			if (ct->opt.role == ROLE_SERVER)
 				dir = 1;
 
-			ret = net_write(ct, net_srv, data, ret, dir);
-
-			memset(data, 0x00, sizeof(char *) * ct->opt.packet_size);
-
-			if (ret <= 0)
-			{
-				fprintf(stdout, "net_write %s:%d\n", __FILE__, __LINE__);
-				break;
-			}
+			if (pkt.len > 0)
+                        {
+			        ret = net_write(ct, net_srv, &pkt, dir);
+			        if (ret <= 0)
+				        break;
+                        }
 		}
 		if (ct->opt.proto == UDP && ct->opt.comp == 1)
 		{
-			z_compress_reset(ct->comp);
+			z_compress_reset(&ct->comp);
 		}
-		memset(data, 0x00, sizeof(char *) * ct->opt.packet_size);
 	}
+
+        if (ct->opt.stats == 1)
+        {
+		t = time(NULL);
+		if (ct->opt.role == 0)
+                {
+		        xfer_stats_update(&tx_st, net_cli->rate.tx.total, t);
+			xfer_stats_update(&rx_st, net_cli->rate.rx.total, t);
+                }
+		if (ct->opt.role == 1)
+                {
+			xfer_stats_update(&rx_st, net_srv->rate.rx.total, t);
+			xfer_stats_update(&tx_st, net_srv->rate.tx.total, t);
+                }
+                xfer_stats_print(stdout, &tx_st, &rx_st);
+        }
+
 	/* Connection closed */
 	FD_CLR(net_cli->sockfd, &rfd);
 	FD_CLR(net_srv->sockfd, &rfd);
@@ -150,7 +179,7 @@ void *ctunnel_mainloop(void *arg)
 		pthread_mutex_lock(&mutex);
 		threads[ct->id] = 2;
 		pthread_mutex_unlock(&mutex);
-		//fprintf(stdout, "THREAD: Exit %d\n", ct->id);
+		ctunnel_log(stderr, LOG_INFO, "THREAD: Exit %d", ct->id);
 		net_close(net_cli);
 		net_close(net_srv);
 		if (ct->opt.proxy == 0)
@@ -160,14 +189,15 @@ void *ctunnel_mainloop(void *arg)
 		}
 		if (ct->opt.comp == 1)
 		{
-			z_compress_end(ct->comp);
+			z_compress_end(&ct->comp);
 		}
 
 		free(net_cli);
 		free(net_srv);
 	}
 	//free(ct);
-	free(data);
+	free(pkt.data);
+
 	if (ct->opt.proto == TCP)
 		pthread_exit(0);
 	return NULL;

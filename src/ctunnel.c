@@ -46,6 +46,7 @@ int main(int argc, char *argv[])
 	//memset(opt.host, 0x00, sizeof(opt.host));
 
 #ifndef _WIN32
+	signal(SIGPIPE, SIG_IGN);
 	signal(SIGCHLD, SIG_IGN);
 	signal(SIGINT, crypto_shutdown);
 	signal(SIGTERM, crypto_shutdown);
@@ -134,7 +135,7 @@ int main(int argc, char *argv[])
 			setsid();
 		if (pid == -1)
 		{
-			ctunnel_log(stdout, LOG_CRIT, "fork() %s\n", strerror(errno));
+			ctunnel_log(stderr, LOG_CRIT, "fork() %s\n", strerror(errno));
 			exit(1);
 		}
 		if (pid > 0)

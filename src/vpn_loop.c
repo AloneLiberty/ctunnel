@@ -99,8 +99,8 @@ void vpn_loop(struct options opt)
 
 	/*
     for (i = 0; i < MAX_CLIENTS; i++) {
-	memset(hosts[i].natip, 0x00, 32);
-	memset(hosts[i].tunip, 0x00, 32);
+	memset(hosts[i].natip, 0x00, INET_ADDRSTRLEN);
+	memset(hosts[i].tunip, 0x00, INET_ADDRSTRLEN);
     }
 */
 	i = 0;
