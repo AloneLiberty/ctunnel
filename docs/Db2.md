@@ -89,4 +89,4 @@ kubectl create -f ctunnel-bludr.Deployment.yml
 
 Create a service:
 ```
-kubectl create -f ctunnel-bludr.Deployment.yml
+kubectl create -f ctunnel-bludr.Service.yml
