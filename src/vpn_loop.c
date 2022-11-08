@@ -119,15 +119,15 @@ void vpn_loop(struct options opt)
 			{
 
 				pthread_mutex_lock(&mutex);
-				for (i = 0; i != MAX_THREADS; i++)
+				for (i = 0; i < MAX_THREADS; i++)
 				{
 					if (threads[i] == 0)
 						break;
-					if (i == MAX_THREADS)
-						ctunnel_log(stderr, LOG_CRIT,
-									"Max Threads %d "
-									"reached!",
-									i);
+				}
+				if (i == MAX_THREADS)
+				{
+					ctunnel_log(stderr, LOG_CRIT, "Max Threads %d reached!", i);
+					exit(1);
 				}
 				ctunnel[i] = malloc(sizeof(struct Ctunnel));
 				ctunnel[i]->net_srv = net_srv;
@@ -157,11 +157,10 @@ void vpn_loop(struct options opt)
 										 (void *)ctunnel[i]);
 					if (ret != 0)
 						fprintf(stderr, "Cannot create thread\n");
-					for (x = 0; x != MAX_THREADS; x++)
+					for (x = 0; x < MAX_THREADS; x++)
 					{
 						if (threads[x] == 2)
 						{
-							fprintf(stdout, "Joining thread %d\n", x);
 							pthread_join(tid[x], NULL);
 							pthread_mutex_lock(&mutex);
 							threads[x] = 0;

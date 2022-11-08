@@ -96,15 +96,15 @@ void tunnel_loop(struct options *opt)
 				{
 
 					pthread_mutex_lock(&mutex);
-					for (i = 0; i != MAX_THREADS; i++)
+					for (i = 0; i < MAX_THREADS; i++)
 					{
 						if (threads[i] == 0)
 							break;
-						if (i == MAX_THREADS)
-							ctunnel_log(stderr, LOG_CRIT,
-										"Max Threads %d "
-										"reached!",
-										i);
+					}
+					if (i == MAX_THREADS)
+					{
+						ctunnel_log(stderr, LOG_CRIT, "Max Threads %d reached!", i);
+						exit(1);
 					}
 					ctunnel[i] = malloc(sizeof(struct Ctunnel));
 					ctunnel[i]->clisockfd = net_cli->sockfd;
@@ -158,5 +158,7 @@ void tunnel_loop(struct options *opt)
 				free(ctunnel[i]);
 			}
 		}
-	}
+	} 
+
+	free(ctunnel);
 }
