@@ -30,7 +30,7 @@ void vpn_loop(struct options opt)
 	int i = 0, x = 0, srv_sockfd = 0, ret = 0, tunfd = 0;
 	int pool = 1;
 	pthread_t tid[MAX_THREADS];
-	extern int threads[MAX_THREADS];
+	//extern int threads[MAX_THREADS];
 #ifdef HAVE_OPENSSL
 	crypto_init = openssl_crypto_init;
 	crypto_deinit = openssl_crypto_deinit;

@@ -22,7 +22,7 @@ void tunnel_loop(struct options *opt)
 {
 	struct Ctunnel **ctunnel;
 	pthread_t tid[MAX_THREADS];
-	extern int threads[MAX_THREADS];
+	//extern int threads[MAX_THREADS];
 	int i = 0, x = 0;
 	struct timeval tv;
 	int srv_sockfd = 0;

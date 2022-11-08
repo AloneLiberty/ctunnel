@@ -28,7 +28,7 @@ void *ctunnel_mainloop(void *arg)
 	fd_set rfd;
 	int ret = 0, dir = 0;
 	time_t t, tl;
-	extern int threads[MAX_THREADS];
+	//extern int threads[MAX_THREADS];
 	struct timeval tv;
 #ifdef HAVE_OPENSSL
 	do_encrypt = openssl_do_encrypt;

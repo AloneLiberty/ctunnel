@@ -148,7 +148,7 @@ struct options get_options(int argc, char *argv[])
 				exit(0);
 				break;
 			case 'v':
-				version();
+				exit(0);
 				break;
 			case 'U':
 				opt.proto = UDP;
