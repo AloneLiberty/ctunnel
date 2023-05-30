@@ -120,17 +120,17 @@ void tunnel_loop(struct options *opt)
 								   (void *)ctunnel_mainloop,
 								   (void *)ctunnel[i]);
 					//pthread_detach(tid[i]);
-					for (x = 0; x != MAX_THREADS; x++)
-					{
-						if (threads[x] == 2)
-						{
-							pthread_join(tid[x], NULL);
-							pthread_mutex_lock(&mutex);
-							threads[x] = 0;
-							free(ctunnel[x]);
-							pthread_mutex_unlock(&mutex);
-						}
-					}
+					//for (x = 0; x != MAX_THREADS; x++)
+					//{
+					//	if (threads[x] == 2)
+					//	{
+					//		pthread_join(tid[x], NULL);
+					//		pthread_mutex_lock(&mutex);
+					//		threads[x] = 0;
+					//		free(ctunnel[x]);
+					//		pthread_mutex_unlock(&mutex);
+					//	}
+					//}
 				}
 			        else
 			        {
