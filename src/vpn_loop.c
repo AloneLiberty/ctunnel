@@ -123,11 +123,11 @@ void vpn_loop(struct options opt)
 				{
 					if (threads[i] == 0)
 						break;
-					if (i == MAX_THREADS - 1)
-						ctunnel_log(stderr, LOG_CRIT,
-									"Max Threads %d "
-									"reached!",
-									i);
+				}
+				if (i == MAX_THREADS)
+				{
+					ctunnel_log(stderr, LOG_CRIT, "Max Threads %d reached!", i);
+					exit(1);
 				}
 				ctunnel[i] = malloc(sizeof(struct Ctunnel));
 				ctunnel[i]->net_srv = net_srv;
