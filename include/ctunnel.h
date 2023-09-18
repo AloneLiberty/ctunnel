@@ -211,14 +211,14 @@ struct Ctunnel
     char dst[INET_ADDRSTRLEN];
 };
 
-pthread_mutex_t mutex;
+static pthread_mutex_t mutex;
 
 #define KEYFILE "/.passkey"
 #define PACKET_SIZE 2048
 #define MAX_THREADS 2048
 #define MAX_CLIENTS 10
 
-int threads[MAX_THREADS];
+static int threads[MAX_THREADS];
 
 //char **hosts;
 struct Hosts
@@ -233,21 +233,21 @@ struct Hosts
     struct in_addr addr;
     time_t time;
 };
-struct Hosts hosts[MAX_CLIENTS];
-int clients;
+static struct Hosts hosts[MAX_CLIENTS];
+static int clients;
 
 #ifdef HAVE_OPENSSL
-int (*do_encrypt)(crypto_ctx *ctx, struct Packet *pkt, struct Packet *pkt_out);
-int (*do_decrypt)(crypto_ctx *ctx, struct Packet *pkt, struct Packet *pkt_out);
-crypto_ctx *(*crypto_init)(struct options opt, int dir);
-void (*crypto_deinit)(crypto_ctx *ctx);
-void (*crypto_reset)(crypto_ctx *ctx, struct options opt, int dir);
+static int (*do_encrypt)(crypto_ctx *ctx, struct Packet *pkt, struct Packet *pkt_out);
+static int (*do_decrypt)(crypto_ctx *ctx, struct Packet *pkt, struct Packet *pkt_out);
+static crypto_ctx *(*crypto_init)(struct options opt, int dir);
+static void (*crypto_deinit)(crypto_ctx *ctx);
+static void (*crypto_reset)(crypto_ctx *ctx, struct options opt, int dir);
 #else
-int (*do_encrypt)(crypto_ctx ctx, struct Packet *pkt, struct Packet *pkt_out);
-int (*do_decrypt)(crypto_ctx ctx, struct Packet *pkt, struct Packet *pkt_out);
-crypto_ctx (*crypto_init)(struct options opt, int dir);
-void (*crypto_deinit)(crypto_ctx ctx);
-void (*crypto_reset)(crypto_ctx ctx, struct options opt, int dir);
+static int (*do_encrypt)(crypto_ctx ctx, struct Packet *pkt, struct Packet *pkt_out);
+static int (*do_decrypt)(crypto_ctx ctx, struct Packet *pkt, struct Packet *pkt_out);
+static crypto_ctx (*crypto_init)(struct options opt, int dir);
+static void (*crypto_deinit)(crypto_ctx ctx);
+static void (*crypto_reset)(crypto_ctx ctx, struct options opt, int dir);
 #endif
 
 #define SERVER 1
